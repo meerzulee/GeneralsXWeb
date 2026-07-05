@@ -113,6 +113,10 @@ public:
 	*/
 	Player *findPlayerWithNameKey(NameKeyType key);
 
+	void setSlotIndex(PlayerIndex playerIndex, Byte slotIndex);
+	Byte getSlotIndex(PlayerIndex playerIndex) const;
+	void resolveSlotIndices();
+
 	/**
 		Return the "local" player (ie, the human playing the game).
 		This will never return null.
@@ -162,6 +166,7 @@ private:
 	Player				*m_local;
 	Int						m_playerCount;
 	Player				*m_players[MAX_PLAYER_COUNT];
+	Byte					m_slotIndices[MAX_PLAYER_COUNT];
 
 };
 

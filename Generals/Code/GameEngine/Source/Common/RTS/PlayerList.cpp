@@ -59,7 +59,7 @@
 #endif
 #include "GameLogic/SidesList.h"
 #include "GameNetwork/NetworkDefs.h"
-
+#include "GameNetwork/GameInfo.h"
 
 //-----------------------------------------------------------------------------
 /*extern*/ PlayerList *ThePlayerList = nullptr;
@@ -109,6 +109,46 @@ Player *PlayerList::findPlayerWithNameKey(NameKeyType key)
 	}
 	return nullptr;
 }
+
+//-----------------------------------------------------------------------------
+void PlayerList::setSlotIndex(PlayerIndex playerIndex, Byte slotIndex)
+{
+	if (playerIndex >= 0 && playerIndex < ARRAY_SIZE(m_slotIndices))
+	{
+		m_slotIndices[playerIndex] = slotIndex;
+	}
+}
+
+Byte PlayerList::getSlotIndex(PlayerIndex playerIndex) const
+{
+	if (playerIndex >= 0 && playerIndex < ARRAY_SIZE(m_slotIndices))
+	{
+		return m_slotIndices[playerIndex];
+	}
+
+	return -1;
+}
+
+void PlayerList::resolveSlotIndices()
+{
+	AsciiString playerName;
+
+	for (Int i = 0; i < MAX_SLOTS; ++i)
+	{
+		const GameSlot* slot = TheGameInfo->getSlot(i);
+		if (!slot || !slot->isOccupied())
+			continue;
+
+		playerName.format("player%d", i);
+
+		Player* player = findPlayerWithNameKey(TheNameKeyGenerator->nameToKey(playerName));
+		if (player)
+		{
+			setSlotIndex(player->getPlayerIndex(), i);
+		}
+	}
+}
+
 
 //-----------------------------------------------------------------------------
 void PlayerList::reset()
@@ -226,6 +266,7 @@ void PlayerList::newGame()
 		p->setDefaultTeam();
 	}
 
+	resolveSlotIndices();
 }
 
 //-----------------------------------------------------------------------------
@@ -233,6 +274,7 @@ void PlayerList::init()
 {
 	m_playerCount = 1;
 	m_players[0]->init(nullptr);
+	memset(m_slotIndices, -1, sizeof(m_slotIndices));
 
 	for (int i = 1; i < MAX_PLAYER_COUNT; i++)
 		m_players[i]->init(nullptr);
