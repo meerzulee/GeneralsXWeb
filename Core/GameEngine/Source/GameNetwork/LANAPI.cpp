@@ -38,6 +38,10 @@
 #include "Common/UserPreferences.h"
 #include "GameLogic/GameLogic.h"
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>  // EM_ASM_INT for the synthetic-IP hook (see webrtc_udp.js)
+#endif
+
 #ifndef _WIN32
 #include <ifaddrs.h>
 #include <net/if.h>
@@ -1442,6 +1446,17 @@ void LANAPI::addPlayer( LANPlayer *player )
 
 Bool LANAPI::SetLocalIP( UnsignedInt localIP )
 {
+#ifdef __EMSCRIPTEN__
+	// The LAN "local IP" the engine announces must be the synthetic IP the WebRTC
+	// bridge assigned (10.0.0.N), not the OS-detected address (not routable over
+	// the cafe room).
+	{
+		UnsignedInt synth = (UnsignedInt) EM_ASM_INT({
+			return (typeof window !== 'undefined' && window.CafeUdp) ? (window.CafeUdp.localIP() >>> 0) : 0;
+		});
+		if (synth) localIP = synth;
+	}
+#endif
 	Bool retval = TRUE;
 	UnsignedInt oldIP = m_localIP;
 	m_localIP = localIP;

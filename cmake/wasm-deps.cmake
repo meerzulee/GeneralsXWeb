@@ -98,6 +98,12 @@ add_link_options(
     "-sEXIT_RUNTIME=0"
 )
 
+# NOTE: the loading-screen yield needs stack-switching. JSPI (Chrome-only, Safari
+# lacks it -> engine won't instantiate) and ASYNCIFY (incompatible with
+# -fwasm-exceptions, 3x binary) both fail as a universal build. The cross-browser
+# fix is an async state-machine load (rAF-driven chunks); until then the load runs
+# synchronously (brief freeze) but boots everywhere.
+
 # ---- d8web: D3D8→WebGL2 translation layer + engine bridge ----
 # d8web lives in the igroteka monorepo one level up from this fork.
 add_subdirectory(${CMAKE_SOURCE_DIR}/../dvijoke/d8web d8web EXCLUDE_FROM_ALL)

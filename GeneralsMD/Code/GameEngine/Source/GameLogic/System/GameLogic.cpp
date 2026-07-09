@@ -79,6 +79,9 @@
 #include "GameClient/LoadScreen.h"
 #include "GameClient/MapUtil.h"
 #include "GameClient/Mouse.h"
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>  // emscripten_sleep — yield the multiplayer load barrier
+#endif
 #include "GameClient/ParticleSys.h"
 #include "GameClient/TerrainVisual.h"
 #include "GameClient/View.h"
@@ -2317,6 +2320,11 @@ void GameLogic::tryStartNewGame( Bool loadingSaveGame )
 	{
 		updateLoadProgress(101); // keep greater then 100
 		testTimeOut();
+#ifdef __EMSCRIPTEN__
+		// Multiplayer load barrier: pump the network so the peer's "load complete"
+		// is received (harmless in single-player, where this loop doesn't run).
+		if (TheNetwork) TheNetwork->liteupdate();
+#endif
 		Sleep(100);
 	}
 
