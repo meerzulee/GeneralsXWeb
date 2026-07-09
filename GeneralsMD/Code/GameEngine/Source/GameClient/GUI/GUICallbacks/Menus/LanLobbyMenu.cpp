@@ -95,6 +95,16 @@ Bool LANPreferences::loadFromIniFile()
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
+// Autopilot mode from the launch URL: 0 none, 1 host (?host=1), 2 join (?autojoin=1).
+static int cafe_autopilot_mode()
+{
+	return EM_ASM_INT({
+		if (typeof window === 'undefined') return 0;
+		if (window.CAFE_AUTO === 'host') return 1;
+		if (window.CAFE_AUTO === 'join') return 2;
+		return 0;
+	});
+}
 #endif
 
 UnicodeString LANPreferences::getUserName()
@@ -686,6 +696,34 @@ void LanLobbyMenuUpdate( WindowLayout * layout, void *userData)
 
 	if (TheShell->isAnimFinished() && !LANbuttonPushed && TheLAN)
 		TheLAN->update();
+
+#ifdef __EMSCRIPTEN__
+	// Autopilot: host auto-creates a game; joiner waits for the host's game to be
+	// discovered (broadcast over the WebRTC shim) then auto-joins it. Igroteka
+	// gathers the party -> each tab opens ?host=1 / ?autojoin=1 -> straight into
+	// the game. Fires only once the lobby is live.
+	if (TheShell->isAnimFinished() && !LANbuttonPushed && TheLAN)
+	{
+		int mode = cafe_autopilot_mode();
+		static Bool s_hostFired = FALSE;
+		static Int s_joinTick = 0;
+		if (mode == 1)
+		{
+			if (!s_hostFired) { s_hostFired = TRUE; TheLAN->RequestGameCreate(L"", FALSE); }
+		}
+		else if (mode == 2)
+		{
+			if ((s_joinTick++ % 45) == 0)
+			{
+				LANGameInfo *theGame = TheLAN->LookupGameByListOffset(0);
+				if (theGame)
+					TheLAN->RequestGameJoin(theGame);
+				else
+					DEBUG_LOG(("autopilot: waiting for host's game in LAN lobby..."));
+			}
+		}
+	}
+#endif
 
 	if (LANSocketErrorDetected == TRUE) {
 		LANSocketErrorDetected = FALSE;

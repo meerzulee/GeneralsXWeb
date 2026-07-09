@@ -53,7 +53,30 @@
       window.CAFE_URL  = p.get('cafe')   || 'https://cafe-nw.mrz.sh';
       window.CAFE_ROOM = p.get('room')   || 'lan';
       window.CAFE_NAME = p.get('player') || ('gx-' + Math.floor(Math.random() * 1e4));
-      log('[cafe] room=' + window.CAFE_ROOM + ' name=' + window.CAFE_NAME);
+      // Autopilot: ?host=1 auto-creates the game, ?autojoin=1 auto-joins the host.
+      // Lets Igroteka gather a party then open each tab straight into the match.
+      window.CAFE_AUTO = p.get('host') ? 'host' : (p.get('autojoin') ? 'join' : '');
+      log('[cafe] room=' + window.CAFE_ROOM + ' name=' + window.CAFE_NAME +
+          (window.CAFE_AUTO ? ' auto=' + window.CAFE_AUTO : ''));
+    })();
+
+    // Room + connection HUD (top-right). Shows the room code so players don't get
+    // confused, and doubles as the "is the host alive/connectable" helper.
+    (function() {
+      var hud = document.createElement('div');
+      hud.id = 'cafeHud';
+      hud.style.cssText = 'position:fixed;top:6px;right:10px;z-index:20;' +
+        'background:rgba(16,18,26,.82);color:#9fe;padding:5px 11px;' +
+        'border:1px solid #2a3a4a;border-radius:5px;font:12px/1.5 ui-monospace,monospace;' +
+        'pointer-events:none;white-space:nowrap;';
+      document.body.appendChild(hud);
+      setInterval(function() {
+        if (!window.CafeUdp) return;
+        var s = window.CafeUdp.status();
+        hud.textContent = 'ROOM ' + s.room + '  ·  you ' + s.myIP +
+          '  ·  players ' + s.peers +
+          '  ·  host ' + (s.isHost ? 'you' : (s.hostAlive ? 'live' : 'waiting…'));
+      }, 500);
     })();
 
     var Module = {

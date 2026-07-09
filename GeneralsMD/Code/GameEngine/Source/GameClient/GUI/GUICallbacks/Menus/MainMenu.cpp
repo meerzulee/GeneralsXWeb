@@ -852,12 +852,41 @@ void ResolutionDialogUpdate()
 /** Main menu update method */
 //-------------------------------------------------------------------------------------------------
 void DownloadMenuUpdate( WindowLayout *layout, void *userData );
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
+
 void MainMenuUpdate( WindowLayout *layout, void *userData )
 {
 	if( TheGameLogic->isInGame() && !TheGameLogic->isInShellGame() )
 	{
 		return;
 	}
+
+#ifdef __EMSCRIPTEN__
+	// Autopilot: launched with ?host=1 / ?autojoin=1 -> skip the menus, jump straight
+	// to the private LAN lobby (host auto-creates a game; joiner waits for it to be
+	// discovered then auto-joins). Igroteka gathers the party and opens each tab
+	// with the param -> straight into the game. See LanLobbyMenuUpdate.
+	{
+		static Bool s_autoPushed = FALSE;
+		if (!s_autoPushed)
+		{
+			int mode = EM_ASM_INT({
+				if (typeof window === 'undefined') return 0;
+				if (window.CAFE_AUTO === 'host') return 1;
+				if (window.CAFE_AUTO === 'join') return 2;
+				return 0;
+			});
+			if (mode != 0)
+			{
+				s_autoPushed = TRUE;
+				TheShell->push("Menus/LanLobbyMenu.wnd");
+			}
+		}
+	}
+#endif
+
 	if(DontShowMainMenu && justEntered)
 		justEntered = FALSE;
 

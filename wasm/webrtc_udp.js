@@ -42,6 +42,9 @@
   // ---- cafe signaling ----
   CafeUdp.prototype.connect = function (base, room, name) {
     var self = this;
+    this.base = base;
+    this.room = room;
+    this.name = name;
     var wsUrl = base.replace(/^http/, "ws") +
       "/room/" + encodeURIComponent(room) + "/ws?name=" + encodeURIComponent(name || "engine");
     var ws = new WebSocket(wsUrl);
@@ -78,20 +81,20 @@
     }
   };
 
-  // Deterministic synthetic-IP assignment: sort ids, index+1 = last octet.
-  // Every peer computes the same map from the same roster, no server help needed.
+  // Synthetic IP from the server-assigned stable slot: 10.0.0.<slot>. Stable for
+  // the peer's whole session (unlike a client-side id sort that reshuffles as
+  // peers join/leave), so the address a peer announces always routes back to it.
   CafeUdp.prototype._assignIPs = function (players) {
-    var ids = players.map(function (p) { return p.id; }).sort();
     this.ipToPeer.clear();
     var self = this;
-    ids.forEach(function (pid, i) {
-      var ip = ip2int(10, 0, 0, i + 1);
-      self.ipToPeer.set(ip, pid);
-      if (pid === self.id) self.myIP = ip;
-      var link = self.peers.get(pid);
+    players.forEach(function (p) {
+      var ip = ip2int(10, 0, 0, p.slot || 1);
+      self.ipToPeer.set(ip, p.id);
+      if (p.id === self.id) self.myIP = ip;
+      var link = self.peers.get(p.id);
       if (link) link.syntheticIP = ip;
     });
-    this.log("myIP=" + ipStr(this.myIP) + " peers=" + ids.length);
+    this.log("myIP=" + ipStr(this.myIP) + " peers=" + players.length);
   };
 
   CafeUdp.prototype._reconcile = function (players) {
@@ -147,6 +150,62 @@
 
   CafeUdp.prototype.close = function (port) { this.inboxes.delete(port); };
   CafeUdp.prototype.localIP = function () { return this.myIP >>> 0; };
+
+  // Live connection status — the "is the host alive / connectable" helper. Read
+  // from the HUD overlay (boot.html) or from JS: window.CafeUdp.status().
+  CafeUdp.prototype.status = function () {
+    var self = this;
+    var host = this.roster.find(function (p) { return p.host; });
+    var hostAlive = false;
+    if (host) {
+      if (host.id === this.id) hostAlive = true; // we are the host
+      else {
+        var link = this.peers.get(host.id);
+        hostAlive = !!(link && link.channel && link.channel.readyState === "open");
+      }
+    }
+    return {
+      room: this.room || "?",
+      connected: !!this.connected,
+      myIP: ipStr(this.myIP),
+      peers: this.roster.length,
+      isHost: !!(host && host.id === this.id),
+      hostAlive: hostAlive,
+      hostIP: ipStr(this.hostIP()),
+    };
+  };
+
+  // Switch to a different lobby room (the Direct Connect "room code" flow). Same
+  // room = no-op (keeps the live connection, so hostIP() is immediate). A real
+  // switch tears down the peers and reconnects; hostIP() is 0 until the new
+  // roster arrives (~1s), so the caller may retry.
+  CafeUdp.prototype.joinRoom = function (code) {
+    code = String(code || "").trim();
+    if (!code || code === this.room) return;
+    this.log("switching room " + this.room + " -> " + code);
+    this.peers.forEach(function (l) { l.close(); });
+    this.peers.clear();
+    this.ipToPeer.clear();
+    this.roster = [];
+    this.myIP = 0;
+    try { this.ws && this.ws.close(); } catch (e) {}
+    this.connect(this.base, code, this.name);
+  };
+
+  // Synthetic IP to direct-connect to: the room's game host (roster host flag),
+  // or the sole other peer in a 1v1 room. 0 if not known yet.
+  CafeUdp.prototype.hostIP = function () {
+    var self = this;
+    var pick = this.roster.find(function (p) { return p.host && p.id !== self.id; });
+    if (!pick) {
+      var others = this.roster.filter(function (p) { return p.id !== self.id; });
+      if (others.length === 1) pick = others[0];
+    }
+    if (pick) {
+      for (var ent of this.ipToPeer) if (ent[1] === pick.id) return ent[0] >>> 0;
+    }
+    return 0;
+  };
 
   // Called by a PeerLink when a framed datagram arrives on its channel.
   CafeUdp.prototype._deliver = function (peerId, buf) {
