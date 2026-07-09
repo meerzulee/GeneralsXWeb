@@ -93,9 +93,36 @@ Bool LANPreferences::loadFromIniFile()
 	return load("Network.ini");
 }
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
+
 UnicodeString LANPreferences::getUserName()
 {
 	UnicodeString ret;
+
+#ifdef __EMSCRIPTEN__
+	// Each browser window gets a distinct LAN name from window.CAFE_NAME (random
+	// per tab — see boot.html ?player=). Without this both tabs fall through to
+	// the same machine-name default and collide as one player in the lobby.
+	{
+		char buf[64];
+		int n = EM_ASM_INT({
+			var s = (typeof window !== 'undefined' && window.CAFE_NAME) ? String(window.CAFE_NAME) : '';
+			if (!s) return 0;
+			var b = new TextEncoder().encode(s.slice(0, 62));
+			HEAPU8.set(b, $0);
+			HEAPU8[$0 + b.length] = 0;
+			return b.length;
+		}, buf);
+		if (n > 0)
+		{
+			AsciiString a(buf);
+			ret.translate(a);
+			return ret;
+		}
+	}
+#endif
 
 	LANPreferences::const_iterator it = find("UserName");
 	if (it != end())
